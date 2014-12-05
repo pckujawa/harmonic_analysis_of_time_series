@@ -1,4 +1,2 @@
-harmonic_analysis_of_time_series
-================================
-
-Harmonic analysis of time series in python
+# Harmonic analysis of time series in python
+An answer to [python - Harmonic analysis of time series applied to arrays - Code Review Stack Exchange](http://codereview.stackexchange.com/questions/71489/harmonic-analysis-of-time-series-applied-to-arrays), which derived from [MATLAB Implementation of Harmonic ANalysis of Time Series (HANTS) - File Exchange - MATLAB Central](http://www.mathworks.com/matlabcentral/fileexchange/38841-matlab-implementation-of-harmonic-analysis-of-time-series--hants-).
