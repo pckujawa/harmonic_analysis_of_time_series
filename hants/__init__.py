@@ -87,8 +87,7 @@ def HANTS(sample_count, inputs,
 
     dod = 1  # (2*frequencies_considered_count-1)  # Um, no it isn't :/
     noutmax = sample_count - nr - dod
-    while ((not it.finished) & (not ready.all())):
-
+    while not it.finished and not ready.all():
         # print '--------*-*-*-*',it.value, '*-*-*-*--------'
         # multiply outliers with timeseries
         za = np.einsum('ijk,ik->ij', mat, p * inputs)
@@ -113,14 +112,12 @@ def HANTS(sample_count, inputs,
         ready = (maxerr <= fit_error_tolerance) | (nout == noutmax)
 
         # if ready is still false
-        if (not all(ready)):
-            i = sample_count  # i is number of input images
-            j = rankVec.take(i - 1, axis=-1)
+        if not ready.all():
+            j = rankVec.take(sample_count - 1, axis=-1)
 
             p.T[j.T, np.indices(j.shape)] = p.T[j.T, np.indices(j.shape)] * ready.astype(
                 int)  #*check
             nout += 1
-            i -= 1
 
         it.iternext()
     return yr
