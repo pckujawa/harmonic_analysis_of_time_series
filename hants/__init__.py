@@ -19,10 +19,11 @@ def get_starter_matrix(base_period_len, sample_count, frequencies_considered_cou
     # create some standard sinus and cosinus functions and put in matrix
     i = np.arange(1, frequencies_considered_count + 1)
     ts = np.arange(sample_count)
-    for j in np.arange(sample_count):
-        index = np.mod(i * ts[j], base_period_len)
-        mat[2 * i - 1, j] = cs.take(index)
-        mat[2 * i, j] = sn.take(index)
+    for column in xrange(sample_count):
+        index = np.mod(i * ts[column], base_period_len)
+        # index looks like 000, 123, 246, etc, until it wraps around (for len(i)==3)
+        mat[2 * i - 1, column] = cs.take(index)
+        mat[2 * i, column] = sn.take(index)
 
     return mat
 
