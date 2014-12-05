@@ -82,12 +82,12 @@ def HANTS(sample_count, inputs,
 
     # prepare for while loop
     ready = np.zeros((inputs.shape[0]), dtype=bool)  # all timeseries set to false
-    a = np.arange(sample_count)
-    it = np.nditer(a)
 
     dod = 1  # (2*frequencies_considered_count-1)  # Um, no it isn't :/
     noutmax = sample_count - nr - dod
-    while not it.finished and not ready.all():
+    for _ in xrange(sample_count):
+        if ready.all():
+            break
         # print '--------*-*-*-*',it.value, '*-*-*-*--------'
         # multiply outliers with timeseries
         za = np.einsum('ijk,ik->ij', mat, p * inputs)
@@ -119,7 +119,6 @@ def HANTS(sample_count, inputs,
                 int)  #*check
             nout += 1
 
-        it.iternext()
     return yr
 
 
