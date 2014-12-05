@@ -11,24 +11,29 @@ def makediag3d(M):
 # Function to apply the Harmonic analysis of time series applied to arrays
 # import profilehooks
 # @profilehooks.profile(sort='time')
-def HANTS(ni, y, nf=3, HiLo='Hi', low=0., high=255, fet=5, delta=0.1):
+def HANTS(sample_count, inputs,
+          frequencies_considered_count=3,
+          outliers_to_reject='Hi',
+          low=0., high=255,
+          fit_error_tolerance=5,
+          delta=0.1):
     """
-    ni    = nr. of images (total number of actual samples of the time series)
-    nb    = length of the base period, measured in virtual samples
+    sample_count    = nr. of images (total number of actual samples of the time series)
+    base_period_len    = length of the base period, measured in virtual samples
             (days, dekads, months, etc.)
-    nf    = number of frequencies to be considered above the zero frequency
-    y     = array of input sample values (e.g. NDVI values)
-    ts    = array of size ni of time sample indicators
+    frequencies_considered_count    = number of frequencies to be considered above the zero frequency
+    inputs     = array of input sample values (e.g. NDVI values)
+    ts    = array of size sample_count of time sample indicators
             (indicates virtual sample number relative to the base period);
-            numbers in array ts maybe greater than nb
+            numbers in array ts maybe greater than base_period_len
             If no aux file is used (no time samples), we assume ts(i)= i,
-            where i=1, ..., ni
-    HiLo  = 2-character string indicating rejection of high or low outliers
+            where i=1, ..., sample_count
+    outliers_to_reject  = 2-character string indicating rejection of high or low outliers
             select from 'Hi', 'Lo' or 'None'
     low   = valid range minimum
     high  = valid range maximum (values outside the valid range are rejeced
             right away)
-    fet   = fit error tolerance (points deviating more than fet from curve
+    fit_error_tolerance   = fit error tolerance (points deviating more than fit_error_tolerance from curve
             fit are rejected)
     dod   = degree of overdeterminedness (iteration stops if number of
             points reaches the minimum required for curve fitting, plus
@@ -37,61 +42,62 @@ def HANTS(ni, y, nf=3, HiLo='Hi', low=0., high=255, fet=5, delta=0.1):
     """
 
     # define some parameters
-    nb = ni  #
-    ts = np.arange(ni)
-    dod = 1  # (2*nf-1)
-
-    # create empty arrays to fill
-    mat = np.zeros(shape=(min(2 * nf + 1, ni), ni))
-
-    yr = np.zeros(shape=(y.shape[0], ni))
+    base_period_len = sample_count  #
 
     # check which setting to set for outlier filtering
-    if HiLo == 'Hi':
+    if outliers_to_reject == 'Hi':
         sHiLo = -1
-    elif HiLo == 'Lo':
+    elif outliers_to_reject == 'Lo':
         sHiLo = 1
     else:
         sHiLo = 0
 
+    nr = min(2 * frequencies_considered_count + 1,
+             sample_count)  # number of 2*+1 frequencies, or number of input images
+
+    # create empty arrays to fill
+    mat = np.zeros(shape=(nr, sample_count))
+    yr = np.zeros(shape=(inputs.shape[0], sample_count))
+
     # initiate parameters
-    nr = min(2 * nf + 1, ni)  # number of 2*+1 frequecies, or number of input images
-    noutmax = ni - nr - dod  # number of input images - number of 2*+1 frequencies - degree of overdeterminedness
     mat[0, :] = 1
-    ang = 2 * np.pi * np.arange(nb) / nb
+    ang = 2 * np.pi * np.arange(base_period_len) / base_period_len
     cs = np.cos(ang)
     sn = np.sin(ang)
 
     # create some standard sinus and cosinus functions and put in matrix
-    i = np.arange(1, nf + 1)
-    for j in np.arange(ni):
-        index = np.mod(i * ts[j], nb)
+    i = np.arange(1, frequencies_considered_count + 1)
+    ts = np.arange(sample_count)
+    for j in np.arange(sample_count):
+        index = np.mod(i * ts[j], base_period_len)
         mat[2 * i - 1, j] = cs.take(index)
         mat[2 * i, j] = sn.take(index)
 
-    # repeat the mat array over the number of arrays in y
-    # and create arrays with ones with shape y where high and low values are set to 0
-    mat = np.tile(mat[None].T, (1, y.shape[0])).T
-    p = np.ones_like(y)
-    p[(low >= y) | (y > high)] = 0
+    # repeat the mat array over the number of arrays in inputs
+    # and create arrays with ones with shape inputs where high and low values are set to 0
+    mat = np.tile(mat[None].T, (1, inputs.shape[0])).T
+    p = np.ones_like(inputs)
+    p[(low >= inputs) | (inputs > high)] = 0
     nout = np.sum(p == 0, axis=-1)  # count the outliers for each timeseries
 
     # prepare for while loop
-    ready = np.zeros((y.shape[0]), dtype=bool)  # all timeseries set to false
-    a = np.arange(ni)
+    ready = np.zeros((inputs.shape[0]), dtype=bool)  # all timeseries set to false
+    a = np.arange(sample_count)
     it = np.nditer(a)
 
+    dod = 1  # (2*frequencies_considered_count-1)  # Um, no it isn't :/
+    noutmax = sample_count - nr - dod
     while ((not it.finished) & (not ready.all())):
 
         # print '--------*-*-*-*',it.value, '*-*-*-*--------'
-        # multipy outliers with timeseries
-        za = np.einsum('ijk,ik->ij', mat, p * y)
+        # multiply outliers with timeseries
+        za = np.einsum('ijk,ik->ij', mat, p * inputs)
 
         # multiply mat with the multiplication of multiply diagonal of p with transpose of mat
         diag = makediag3d(p)
         A = np.einsum('ajk,aki->aji', mat, np.einsum('aij,jka->ajk', diag, mat.T))
-        # add delta to supress high amplitudes but not for [0,0]
-        A = A + np.tile(np.diag(np.ones(nr))[None].T, (1, y.shape[0])).T * delta
+        # add delta to suppress high amplitudes but not for [0,0]
+        A = A + np.tile(np.diag(np.ones(nr))[None].T, (1, inputs.shape[0])).T * delta
         A[:, 0, 0] = A[:, 0, 0] - delta
 
         # solve linear matrix equation and define reconstructed timeseries
@@ -99,16 +105,16 @@ def HANTS(ni, y, nf=3, HiLo='Hi', low=0., high=255, fet=5, delta=0.1):
         yr = np.einsum('ijk,kj->ki', mat.T, zr)
 
         # calculate error and sort err by index
-        err = p * (sHiLo * (yr - y))
+        err = p * (sHiLo * (yr - inputs))
         rankVec = np.argsort(err, axis=1, )
 
         # select maximum error and compute new ready status
-        maxerr = np.diag(err.take(rankVec[:, ni - 1], axis=-1))
-        ready = (maxerr <= fet) | (nout == noutmax)
+        maxerr = np.diag(err.take(rankVec[:, sample_count - 1], axis=-1))
+        ready = (maxerr <= fit_error_tolerance) | (nout == noutmax)
 
         # if ready is still false
         if (not all(ready)):
-            i = ni  # i is number of input images
+            i = sample_count  # i is number of input images
             j = rankVec.take(i - 1, axis=-1)
 
             p.T[j.T, np.indices(j.shape)] = p.T[j.T, np.indices(j.shape)] * ready.astype(
@@ -135,4 +141,4 @@ def array_in(numb):
 
 if __name__ == '__main__':
     y = array_in(10000)
-    HANTS(ni=26, y=y, nf=3, HiLo='Lo')
+    HANTS(sample_count=26, inputs=y, frequencies_considered_count=3, outliers_to_reject='Lo')
