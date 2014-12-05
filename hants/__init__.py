@@ -8,7 +8,25 @@ def makediag3d(M):
     return b.reshape(M.shape[0], M.shape[1], M.shape[1])
 
 
-# Function to apply the Harmonic analysis of time series applied to arrays
+def get_starter_matrix(base_period_len, sample_count, frequencies_considered_count):
+    nr = min(2 * frequencies_considered_count + 1,
+                  sample_count)  # number of 2*+1 frequencies, or number of input images
+    mat = np.zeros(shape=(nr, sample_count))
+    mat[0, :] = 1
+    ang = 2 * np.pi * np.arange(base_period_len) / base_period_len
+    cs = np.cos(ang)
+    sn = np.sin(ang)
+    # create some standard sinus and cosinus functions and put in matrix
+    i = np.arange(1, frequencies_considered_count + 1)
+    ts = np.arange(sample_count)
+    for j in np.arange(sample_count):
+        index = np.mod(i * ts[j], base_period_len)
+        mat[2 * i - 1, j] = cs.take(index)
+        mat[2 * i, j] = sn.take(index)
+
+    return mat
+
+
 # import profilehooks
 # @profilehooks.profile(sort='time')
 def HANTS(sample_count, inputs,
@@ -18,6 +36,8 @@ def HANTS(sample_count, inputs,
           fit_error_tolerance=5,
           delta=0.1):
     """
+    Function to apply the Harmonic analysis of time series applied to arrays
+
     sample_count    = nr. of images (total number of actual samples of the time series)
     base_period_len    = length of the base period, measured in virtual samples
             (days, dekads, months, etc.)
@@ -56,22 +76,9 @@ def HANTS(sample_count, inputs,
              sample_count)  # number of 2*+1 frequencies, or number of input images
 
     # create empty arrays to fill
-    mat = np.zeros(shape=(nr, sample_count))
-    yr = np.zeros(shape=(inputs.shape[0], sample_count))
+    outputs = np.zeros(shape=(inputs.shape[0], sample_count))
 
-    # initiate parameters
-    mat[0, :] = 1
-    ang = 2 * np.pi * np.arange(base_period_len) / base_period_len
-    cs = np.cos(ang)
-    sn = np.sin(ang)
-
-    # create some standard sinus and cosinus functions and put in matrix
-    i = np.arange(1, frequencies_considered_count + 1)
-    ts = np.arange(sample_count)
-    for j in np.arange(sample_count):
-        index = np.mod(i * ts[j], base_period_len)
-        mat[2 * i - 1, j] = cs.take(index)
-        mat[2 * i, j] = sn.take(index)
+    mat = get_starter_matrix(base_period_len, sample_count, frequencies_considered_count)
 
     # repeat the mat array over the number of arrays in inputs
     # and create arrays with ones with shape inputs where high and low values are set to 0
@@ -101,10 +108,10 @@ def HANTS(sample_count, inputs,
 
         # solve linear matrix equation and define reconstructed timeseries
         zr = np.linalg.solve(A, za)
-        yr = np.einsum('ijk,kj->ki', mat.T, zr)
+        outputs = np.einsum('ijk,kj->ki', mat.T, zr)
 
         # calculate error and sort err by index
-        err = p * (sHiLo * (yr - inputs))
+        err = p * (sHiLo * (outputs - inputs))
         rankVec = np.argsort(err, axis=1, )
 
         # select maximum error and compute new ready status
@@ -119,7 +126,7 @@ def HANTS(sample_count, inputs,
                 int)  #*check
             nout += 1
 
-    return yr
+    return outputs
 
 
 # Compute semi-random time series array with numb standing for number of timeseries
